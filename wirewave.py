@@ -8,6 +8,20 @@ import simplejson
 import logging
 import urllib
 import datetime 
+from math import floor
+
+def human_readable_quantity(n):
+    """returns '1.2M' representation of a number"""
+    n = int(n)
+    cnum = 1000 * 1000 * 1000
+    ctags = ["G","M","K"]
+    for i in xrange(0,len(ctags)):
+        if (n >= cnum):
+            ckn = float(n) / cnum
+            return (str(int(floor(ckn))) +"."+str((ckn - floor(ckn))*10)[0]  + ctags[i])
+        cnum = cnum / 1000
+    return str(n)
+
 
 def human_readable_timediff(ctime):
     if (ctime == None):
@@ -98,8 +112,8 @@ class DefaultWaveRenderer():
     
 class WaveReader():
   # wavereader from here
-    session = "503282974482375274562"
-    cookie = "DQAAAI4AAACkbMioiLxQQUKKLrpBbE6hVuwhGvpOpKn8j6UKCda8HtuffWmHjhqVVM4PvZUoxi-gyOzLV3q4MjIIfyxuxPD1vOdqz0kZRe0EVv4EDjQpL9qlrLa7hkK5PZ8tPEhOSlx7OkiTOYizYN0LzUJslvH137hTy0Rhu5K35R8NWvpeW6xqysqEq7T6xlxdLlI-k3Q"
+    session = "506489239123360055547"
+    cookie = "DQAAAHwAAAAJLSo6ZsokiB23xR_z9aISMXQCi1SEF-bUqbE4eNwwFNXVECaaFVCJKbn46rVTOBPv91F2h6BsHS1uG5BDXSXz89SI1FDL3hAIKlScVSyvXTrI-2cCyEGCHCW57j2yqaBmEULj516N2TGUKBxvWfpsqo81DXbrMhV4bq054b32tA"
 
     
     anntags = {"conv/title" : {"start": "", "end" : ""},

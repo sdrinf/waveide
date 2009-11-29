@@ -15,11 +15,22 @@ def viewwave(wid):
     w.read(wid)
     w.render()
     (h,fn) = tempfile.mkstemp(".html","wave")
-    os.write(h,w.renderedHTML)
+    os.write(h,w.renderedHTML.encode("UTF8"))
     os.close(h)
     os.startfile(fn)
     pass
 
+def showcode(wid):
+    w = WaveReader()
+    w.read(wid)
+    code = w.get_root_text()
+    print code
+    (h,fn) = tempfile.mkstemp(".txt","wave")
+    os.write(h,code.encode("UTF8"))
+    os.close(h)
+    os.startfile(fn)
+    pass
+    
 def printhelp():
     print """Usage: wcmd.py [command] [arguments]
 Usable wcmd commands:
@@ -35,6 +46,8 @@ if (sys.argv[1] == "--help"):
     printhelp()
 elif (sys.argv[1] == "runwave"):
     runwave(sys.argv[2])
+elif (sys.argv[1] == "showcode"):
+    showcode(sys.argv[2])
 elif (sys.argv[1] == "view"):
     viewwave(sys.argv[2])
 else:
