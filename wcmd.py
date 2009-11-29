@@ -2,10 +2,22 @@
 
 import os
 import sys
-
+import tempfile
+from wirewave import *
 
 def runwave(wid):
     """runs a wave specified by it's ID"""
+    pass
+
+def viewwave(wid):
+    print "rendering "+wid
+    w = WaveReader()
+    w.read(wid)
+    w.render()
+    (h,fn) = tempfile.mkstemp(".html","wave")
+    os.write(h,w.renderedHTML)
+    os.close(h)
+    os.startfile(fn)
     pass
 
 def printhelp():
@@ -21,9 +33,9 @@ if (len(sys.argv) < 2):
     pass
 if (sys.argv[1] == "--help"):
     printhelp()
-if (sys.argv[1] == "runwave"):
-    runwave(sys.argv[1])
+elif (sys.argv[1] == "runwave"):
+    runwave(sys.argv[2])
+elif (sys.argv[1] == "view"):
+    viewwave(sys.argv[2])
 else:
     print "wcmd: '"+sys.argv[1]+"' is not a valid command. See 'wcmd.py --help'"
-
-

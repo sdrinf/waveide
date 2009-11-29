@@ -9,29 +9,98 @@ import logging
 import urllib
 import datetime 
 
+def human_readable_timediff(ctime):
+    if (ctime == None):
+        return ""
+    td = datetime.datetime.now() - ctime
+    lm = ""
+    if (td.days > 0):
+        ch = (td.seconds / 3600)
+        lm = str(td.days)+" day" + ("s" if (td.days > 1) else "")
+        if (ch > 0):
+            lm += " " +str(ch)+" hour" + ("s" if (ch > 1) else "")
+    elif (td.seconds > 3600):
+        ch = (td.seconds / 3600)
+        lm = str(ch)+" hour" + ("s" if (ch > 1) else "")
+    elif (td.seconds > 60):
+        cm = (td.seconds / 60)
+        lm = str(cm)+" min" + ("s" if (cm > 1) else "")
+    else:
+        return "just now"
+    return lm+" ago"
+
+
+class DefaultWaveRenderer():
+    """Pre-formats wave content"""
+
+    def render_blip_header(self, data):
+	"""render blip's header info"""
+	fr = ""
+	fr = '<div style="background-color:lightgray;padding-left:60px">'
+	fr += '<div style="float:left">';
+	fr += '<a name="#'+data["id"]+'">&nbsp;</a>'
+	fr += '<b>Last modified:</b> '+str(data["last_modified"])+" ("+human_readable_timediff(data["last_modified"])+") <br />"
+	fr += "<a href=\"#"+data["id"]+"\" onclick=\"javascript:switch_div('p_"+data["id"]+"');\">"
+	fr += '<b>Contributors ('+str(len(data["contributors"]))+'):</b></a> '+", ".join(data["contributors"][0:2])+'<br />'
+	fr += '</div>'
+	for c in data["contributors"][0:2]:
+	    if (c.endswith("@googlewave.com")):
+		r = c.split("@")
+		fr += '<img src="http://archive.waverz.com/avatar/'+r[0]+'" style="border:0px; width:40px" />'
+	if (len(data["contributors"]) > 2):
+	    fr += "<div style=\"float:left; background-color:lightgray;\">"
+	    fr += '<div id="p_'+data["id"]+'" style="display:none">'
+	    fr += ", ".join(data["contributors"][2:])
+	    
+	    for c in data["contributors"][2:]:
+		if (c.endswith("@googlewave.com")):
+		    r = c.split("@")
+		    fr += '<img src="http://archive.waverz.com/avatar/'+r[0]+'" style="border:0px; width:40px" />'
+	    fr += '</div><div style="clear:both"></div> </div>'
+	fr += '</div>'
+	return fr
+    
+    def render_attachment(self, data, cid):
+	"""Renders a wave attachment"""
+	res = []
+	if not "attachment_url" in data:
+	    return ""
+	if not "filename" in data:
+	    data["filename"] = "unnamed file"
+	res.append('<br /><div style="display: block; border:1px solid black; padding:8px" id="'+cid+'">')
+	res.append('<a href="https://wave.googleusercontent.com/wave'+data["attachment_url"]+'">')
+	if ("thumbnail_url" in data):
+	    res.append('<img src="https://wave.googleusercontent.com/wave'+data["thumbnail_url"]+'" alt="Download" />')
+	else:
+	    res.append("Download")
+	res.append("</a><br />")
+	res.append('<b>File Attachment:</b> '+data["filename"]+'<br />')
+	res.append('<b>Creator:</b> '+data["creator"]+"<br />")
+	res.append('<b>Size:</b> '+human_readable_quantity(data["attachment_size"])+"B<br/>")
+	res.append("</div>")
+	return "".join(res)
+
+    def render_wave(self, wavelet_meta, innerhtml):
+	"""Renders the main wave frame"""
+	res = "<h1>" + wavelet_meta["title"] + "</h1>"
+	res += """
+	<script language="javascript">function switch_div(id) { document.getElementById(id).style.display = ((document.getElementById(id).style.display == "none")?("inline"):("none")); }</script>
+	"""
+	res += '<b>Last modified:</b> '+human_readable_timediff(wavelet_meta["last_modified"])+"<br />"
+	ps = wavelet_meta["participants"][:min(3,len(wavelet_meta["participants"]))]
+	logging.info(ps)
+	res += '<b>Participants ('+str(len(wavelet_meta["participants"]))
+	res += '):</b> '+unicode(", ".join(ps))+("" if len(wavelet_meta["participants"]) <= 3 else ("..."))+"<br />"
+	res += '</div><div style="clear:both"></div><br />'
+	res += '<div style="font-size:110%; width:100%">'
+	res += innerhtml
+	return res
+    
 class WaveReader():
   # wavereader from here
-    session = ""
-    cookie = ""
+    session = "506489239123360055547"
+    cookie = "DQAAAHwAAAAJLSo6ZsokiB23xR_z9aISMXQCi1SEF-bUqbE4eNwwFNXVECaaFVCJKbn46rVTOBPv91F2h6BsHS1uG5BDXSXz89SI1FDL3hAIKlScVSyvXTrI-2cCyEGCHCW57j2yqaBmEULj516N2TGUKBxvWfpsqo81DXbrMhV4bq054b32tA"
 
-    
-    anntags = {"conv/title" : {"start": "<h1>", "end" : "</h1>"},
-          "style/fontWeight" : {"start": '<font style="font-weight:<%value%>">', "end" : '</font>'},
-          "style/fontSize" : {"start": '<font style="font-size:<%value%>">', "end" : '</font>'},
-          "style/fontStyle" : {"start": '<font style="font-style:<%value%>">', "end" : '</font>'},
-          "style/fontFamily" : {"start": '<font style="font-family:<%value%>">', "end" : '</font>'},
-          "style/textDecoration" : {"start": '<font style="text-decoration:<%value%>">', "end" : '</font>'},
-          "style/color" : {"start": '<font style="color:<%value%>">', "end" : '</font>'},
-          "style/backgroundColor" : {"start": '<font style="background-color:<%value%>">', "end" : '</font>'},
-          
-          "link/manual" : {"start": '<a href="<%value%>">', "end" : '</a>'},
-          "link/auto" : {"start": '<a href="<%value%>">', "end" : '</a>'},
-          "link/wave" : {"start": '<a href="/<%value%>/">', "end" : '</a>'},
-          
-          "spell" : {"start": "", "end" : ""},
-          "lang" : {"start": "", "end" : ""}
-          }
-  
     
     anntags = {"conv/title" : {"start": "", "end" : ""},
           "style/fontWeight" : {"start": '<font style="font-weight:<%value%>">', "end" : '</font>'},
@@ -53,16 +122,19 @@ class WaveReader():
     wiredata = "" # wire data
     wireobj = None # deserialized object
     title = "" # wave title
+    plaintitle = "" # wave title in plaintext
     renderedHTML = ""
     participants = []
     last_modified = None
     tags = [] # wave tags
     blips = { } # blips data
     services = [] # list of users with @appspot.com suffix 
+    waverenderer = DefaultWaveRenderer()
+    rootwavelet = { }
     
 
     def refresh_wire_appengine(self, waveid):
-	"""use google's appengine api"""
+	"""use google's appengine api to fetch a wave"""
 	from google.appengine.api import urlfetch
 	from google.appengine.api import urlfetch_errors
 	url = "https://wave.google.com/wave/wfe/fetch/"+waveid+"/"+self.session+"?v=3"
@@ -84,23 +156,18 @@ class WaveReader():
 	return unicode(result.content[5:],"utf-8")
     
     def refresh_wire_urllib2(self, waveid):
-	import urllib
-	import urllib2
-	class HTTPCustomErrorHandler(urllib2.HTTPRedirectHandler):
-	    # ignore HTTP error 304: Not modified errors
-	    def http_error_304(self, req, fp, code, msg, headers):
-		print code, fp
-		return
-	    
-	headers = {'Cookie': "WAVE="+self.cookie,
-		   'User-Agent' : "Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US) AppleWebKit/525.13 (KHTML, like Gecko) Chrome/4.0.249.11 Safari/525.13"}
-	url = "https://wave.google.com/wave/wfe/fetch/"+waveid+"/"+self.session+"?v=3"
-	req = urllib2.Request(url, None, headers)
-	opener = urllib2.build_opener(HTTPCustomErrorHandler)
-	stream = opener.open(req)
-	result = stream.read()
-	print result
-	return unicode(result[5:],"utf-8")
+	"""use urllib2 to fetch a wave"""
+	import httplib
+	connection = httplib.HTTPSConnection("wave.google.com")
+	connection.request("GET", "/wave/wfe/fetch/"+waveid+"/"+self.session+"?v=3",
+			   None,
+			   {'Cookie': "WAVE="+self.cookie,
+			    'User-Agent' : "Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US) AppleWebKit/525.13 (KHTML, like Gecko) Chrome/4.0.249.11 Safari/525.13"
+			    } )
+	http_response = connection.getresponse() 
+	http_data = http_response.read()
+	connection.close()
+	return unicode(http_data[5:],"utf-8")
 	
     def refresh_wire(self, waveid):
 	"""demuxes GAE vs command line requests"""
@@ -154,8 +221,33 @@ class WaveReader():
 	token = self.anntags[style]["start"].replace("<%value%>", unicode(data))+token+self.anntags[style]["end"]
 	return token
 	
+    def get_blip_text(self, cid):
+	"""returns the plain-text of a blip"""
+	if not (cid in self.blips):
+	    return ""
+	if (cid.startswith("attach+")):
+	    return ""
+	res = []
+	if (16 in self.blips[cid]["raw"]):
+	    obj = self.blips[cid]["raw"][16]
+	    for item in obj[2]:
+		if (5 in item):
+		    if item[5] == True:
+			continue
+		elif (2 in item):
+		    token = item[2]
+		    res.append(token)
+		elif (4 in item):
+		    if (item[4][1] == "line"):
+			res.append("\n")
+	bliptext = "".join(res)
+	return bliptext
+
+    def get_root_text(self):
+	"""returns the plain text of the root blip"""
+	return self.get_blip_text(self.rootwavelet["root_blip"])
     
-    def render_blip_content(self, cid):
+    def render_blip_content(self, cid, recursive = True):
 	res = []
 	nextstyle = []
 	if not (cid in self.blips):
@@ -163,18 +255,7 @@ class WaveReader():
 	if (cid.startswith("attach+")):
 	    data = self.parse_attach(self.blips[cid]["raw"][16])
 	    logging.info("attachment: "+cid+" => "+str(data))
-	    res.append('<br /><div style="display: block; border:1px solid black; padding:8px" id="'+cid+'">')
-	    res.append('<a href="https://wave.googleusercontent.com/wave'+data["attachment_url"]+'">')
-	    if ("thumbnail_url" in data):
-		res.append('<img src="https://wave.googleusercontent.com/wave'+data["thumbnail_url"]+'" alt="Download" />')
-	    else:
-		res.append("Download")
-	    res.append("</a><br />")
-	    res.append('<b>File Attachment:</b> '+data["filename"]+'<br />')
-	    res.append('<b>Creator:</b> '+data["creator"]+"<br />")
-	    res.append('<b>Size:</b> '+human_readable_quantity(data["attachment_size"])+"B<br/>")
-	    res.append("</div>")
-	    return "".join(res)
+	    return self.waverenderer.render_attachment(data, cid)
 	intitle = False
 	if (16 in self.blips[cid]["raw"]):
 	    obj = self.blips[cid]["raw"][16]
@@ -186,6 +267,8 @@ class WaveReader():
 			continue
 		elif (2 in item):
 		    token = item[2]
+		    if (intitle):
+			self.plaintitle = self.plaintitle + token if (self.plaintitle != "") else token
 		    for s in nextstyle:
 			token = self.apply_style(token,s[1],s[3])
 		    if (intitle):
@@ -211,17 +294,22 @@ class WaveReader():
 			if (iblipid in self.blips):
 			    del self.blips[iblipid]
 		    elif (item[4][1] == "w:gadget"):
-			res.append("<br><i> - inline gadget / not yet implemented / - </i><br />")
+			res.append("<!-- inline gadget / not yet implemented / --><br>")
 		    elif (item[4][1] == "body"):
 			#don't.
 			pass
 		    elif (item[4][1] == "reply"):
+			if not recursive:
+			    continue
 			# res.append("<br/><h2> - inline reply : "+str(item[4][2][0][2])+" - </h2><br />")
 			iblipid = item[4][2][0][2]
 			res.append(self.render_blip(iblipid))
 			if (iblipid in self.blips):
 			    del self.blips[iblipid]
 			# res.append(str(
+		    elif (item[4][1] == "w:state"):
+			# nothing to do for state information
+			continue
 		    else:
 			logging.info("unprocessed: "+str(item[4][1]))
 		elif (1 in item):
@@ -238,37 +326,24 @@ class WaveReader():
 			    # logging.info("styles: "+str(item[1][3]))
 	bliphtml = "".join(res)
 	return bliphtml
-
-    def render_blip_header(self, cid):
-	# add header to blip
-	fr = '<table border="0" >'
-	fr += '<tr><td style="background-color:lightgray;width:82px;">'
-	for c in self.blips[cid]["contributors"]:
-	    if (c.endswith("@googlewave.com")):
-		r = c.split("@")
-		fr += '<img src="http://archive.waverz.com/avatar/'+r[0]+'" style="border:0px; width:40px" />'
-	fr += '</td><td style="background-color:lightgray;">'
-	fr += '<div style="float:left;padding-left: 60px;">';
-	fr += '<b>Last modified:</b> '+str(self.blips[cid]["last_modified"])+" ("+human_readable_timediff(self.blips[cid]["last_modified"])+") <br />"
-	fr += '<b>Contributors ('+str(len(self.blips[cid]["contributors"]))+'):</b> '+", ".join(self.blips[cid]["contributors"])+'<br />'
-	fr += '</div>'
-	return fr
 	
-    def render_blip(self, cid, canframe = True):
+    def render_blip(self, cid, canframe = True, recursive = True):
 	if not (cid in self.blips):
 	    return ""
 	isframed = False
-	bliphtml = self.render_blip_content(cid)
+	bliphtml = self.render_blip_content(cid, recursive)
 	if (len(bliphtml) > 0):
+	    # logging.info("rendering blip: "+cid)
 	    if (canframe):
-		header = '<div style="border:1px solid #000000; margin-left:10px; padding:10px">'
-		bliphtml = header + self.render_blip_header(cid) + bliphtml
+		header = '<div style="border:1px solid #000000; padding:0px; margin-left:82px">'
+		bliphtml = header + self.waverenderer.render_blip_header(self.blips[cid]) + bliphtml
 		isframed = True
 	    else:
-		bliphtml = self.render_blip_header(cid) + bliphtml + '<hr size="1" />'
-	    bliphtml += '</td></table>'
+		bliphtml = self.waverenderer.render_blip_header(self.blips[cid]) + bliphtml + '<hr size="1" />'
+	    # bliphtml += '</td></table>'
 	    pass
-	
+	if not recursive:
+	    return bliphtml
 	
 	# render chlidren
 	childarray = [ (b[6] if 6 in b else "") for b in self.blips[cid]["children"]]
@@ -286,31 +361,24 @@ class WaveReader():
 	    bliphtml += '</div>'
 	return bliphtml
     	
-	
-	
-    def render_wave(self, data):
+    
+    def render(self, recursive = True, renderer = DefaultWaveRenderer() ):
+	"""renders a wave's content"""
 	cwn = ""
 	i = 0
 	while (cwn != "googlewave.com!conv+root"):
-	    bliplist = data[1][i][1][2]
-	    wavelet_meta = self.wavelet_parse(data[1][i][1][1])
+	    bliplist = self.wireobj[1][i][1][2]
+	    wavelet_meta = self.wavelet_parse(self.wireobj[1][i][1][1])
 	    cwn = wavelet_meta["wavelet"]
 	    i += 1
 	self.participants = wavelet_meta["participants"]
 	self.last_modified = wavelet_meta["last_modified"]
-	# logging.info(data[1][1][1][1])
-	# return str(wavelet_meta)
-	res = "<h1>" + self.title+ "</h1>"
-	res += '<b>Last modified:</b> '+human_readable_timediff(wavelet_meta["last_modified"])+"<br />"
-	ps = wavelet_meta["participants"][:min(3,len(wavelet_meta["participants"]))]
-	logging.info(ps)
-	res += '<b>Participants ('+str(len(wavelet_meta["participants"]))
-	res += '):</b> '+unicode(", ".join(ps))+("" if len(wavelet_meta["participants"]) <= 3 else ("..."))+"<br />"
-	res += '</div><div style="clear:both"></div><br />'
-	res += '<div style="font-size:110%; width:100%">'
-	res += self.render_blip(wavelet_meta["root_blip"])
-	return res
-    
+	self.waverenderer = renderer
+	bliprender = self.render_blip(wavelet_meta["root_blip"], False, recursive)
+	wavelet_meta["title"] = self.title
+	self.renderedHTML = renderer.render_wave(wavelet_meta, bliprender)
+	return self.renderedHTML
+	
     def get_tags(self):
 	"""returns the list of tags"""
 	res = []
@@ -351,11 +419,16 @@ class WaveReader():
 	if (self.wireobj == False):
 	    return False
 	self.wireobj = self.json_postprocess(self.wireobj)
+	logging.info(str(self.wireobj))
 	# read all blip information here
+	cwn = ""
 	i = -1
 	while (cwn != "googlewave.com!conv+root"):
 	    i += 1
-	    bliplist = data[1][i][1][2]
+	    bliplist = self.wireobj[1][i][1][2]
+	    wavelet_meta = self.wavelet_parse(self.wireobj[1][i][1][1])
+	    cwn = wavelet_meta["wavelet"]
+	self.rootwavelet = wavelet_meta
 	for blipraw in bliplist:
 	    blip = self.blip_parse(blipraw)
 	    cid = blip["id"]
@@ -387,6 +460,7 @@ class WaveReader():
 
 if __name__ == '__main__':
     w = WaveReader()
-    w.read("-YpkJ2B3C.3")
-    print w.get_tags()
+    w.read("googlewave.com!w+lwnQgiOSA")
+    w.render()
+    print w.get_root_text()
 
