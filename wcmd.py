@@ -24,6 +24,7 @@ def showcode(wid):
     w = WaveReader()
     w.read(wid)
     code = w.get_root_text()
+    code = code.replace("\n","\r\n")
     print code
     (h,fn) = tempfile.mkstemp(".txt","wave")
     os.write(h,code.encode("UTF8"))
